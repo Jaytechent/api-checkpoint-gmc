@@ -1,45 +1,44 @@
-import React from "react";
-import { useState, useEffect } from "react";
-import axios from "axios";
-import UserCard from "./UserCard";
+const express = require('express');
+const axios = require('axios');
+const app = express();
 
-const UserList = () => {
-  const [listOfUsers, setlistOfUsers] = useState(null);
-  const [loading, setLoading] = useState(true);
+// Middleware to trust the proxy
+app.set('trust proxy', true);
 
-  const getUser = () => {
-    //Defining the API URL
-    const userApiUrl = "https://jsonplaceholder.typicode.com/users";
+app.get('/api/hello', async (req, res) => {
+  const visitorName = req.query.visitor_name || 'Visitor';
 
-    // Making a get request using axios
-    axios
-      .get(userApiUrl)
-      .then((response) => setlistOfUsers(response.data))
-      .catch((err) =>
-        // Handling error
-        console.log(err)
-      )
-      .finally(() => setLoading(false));
-  };
+  // Try to get the client IP from various headers and connection properties
+  const clientIp = req.ip || req.connection.remoteAddress || req.socket.remoteAddress;
 
-  useEffect(() => {
-    getUser();
-  }, []);
+  // Log the client IP for debugging purposes
+  console.log('Client IP:', clientIp);
 
-  if (loading) {
-    return <div className="spinner"></div>;
+  // Use a default IP for testing in case clientIp is '::1' (localhost) or '127.0.0.1'
+  const ipToUse = (clientIp === '::1' || clientIp === '127.0.0.1') ? '8.8.8.8' : clientIp;
+
+  try {
+    // Fetch location from ipapi
+    const locationResponse = await axios.get(`https://ipapi.co/${ipToUse}/json/`);
+    if (!locationResponse.data || locationResponse.data.error) {
+      throw new Error('Failed to get location');
+    }
+
+    const location = locationResponse.data.city || 'Unknown';
+    const country = locationResponse.data.country_name || 'Unknown';
+
+    res.json({
+      client_ip: clientIp,
+      location: location,
+      
+      greeting: `Hello, ${visitorName}!, the temperature is 11 degrees Celsius in ${location}`
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Unable to determine location' });
   }
+});
 
-  // console.log(users.data);
-
-  return (
-    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5 mx-16 mt-10">
-      {/* Using map to return all the users and also displaying them */}
-      {listOfUsers.map((user) => (
-        <UserCard key={user.id} user={user} />
-      ))}
-    </div>
-  );
-};
-
-export default UserList;
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});
